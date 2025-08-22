@@ -47,6 +47,7 @@ form.addEventListener("submit", async (e) => {
   const file = document.getElementById("aadhaarFile").files[0];
   let passwordInput = document.getElementById("password");
   let passwordError = document.getElementById("passwordError");
+  let instructionsDiv = document.getElementById("instructions");
 
   // Take filename (without extension) as default password
   let autoPassword = file.name.split(".")[0];
@@ -80,6 +81,7 @@ form.addEventListener("submit", async (e) => {
       return;
     } else {
       passwordError.style.display = "none"; // clear error if success
+      instructionsDiv.style.display = "none"; // hide instructions on success
       const base = window.location.origin;
       const templateFront = document.getElementById("templateFront");
       const templateBack = document.getElementById("templateBack");
