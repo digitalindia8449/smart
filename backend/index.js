@@ -368,11 +368,11 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
 
       // 🧾 Hindi Address
       backCtx.font = '80pt "NotoSansHindi"';
-      drawWrappedText(backCtx, addressHindi || '—', hindiX, hindiY, 1850, 120);
+      drawWrappedText(backCtx, addressHindi || '—', hindiX, hindiY, 1750, 120);
 
       // 🌐 English Address
       backCtx.font = '70pt Arial';
-      drawWrappedText(backCtx, addressEnglish || '—', englishX, englishY, 1850, 120);
+      drawWrappedText(backCtx, addressEnglish || '—', englishX, englishY, 1750, 120);
 
 
 
@@ -388,11 +388,11 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
 
         // 🔢 Aadhaar Number
         backCtx.font = 'bold 130pt Arial';
-        backCtx.fillText(aadhaar || '—', 947, 1600);
+        backCtx.fillText(aadhaar || '—', 947, 1590);
 
         // 🔑 VID (Back Side)
         backCtx.font = '60pt Arial';
-        backCtx.fillText(vid || '—', 1240, 1685);
+        backCtx.fillText(vid || '—', 1250, 1680);
 
        if (qrPath && fs.existsSync(qrPath)) {
         const qrImg = await loadImage(qrPath);
