@@ -18,7 +18,8 @@
 
     <form id="uploadForm">
       <input type="file" id="aadhaarFile" accept="application/pdf" required />
-      <input type="password" id="password" placeholder="Enter e-Aadhaar password" required />
+      <input type="password" id="password" placeholder="Enter e-Aadhaar password or Use Filename As Password " style="display:none;" />
+      <p id="passwordError" class="error-msg" style="display:none; color:red; margin-top:5px;"></p>
       <button type="submit" id="submitBtn">
         <span id="btnText">Generate Aadhaar Card</span>
         <span id="spinner" class="spinner hidden"></span>
