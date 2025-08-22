@@ -368,11 +368,11 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
 
       // 🧾 Hindi Address
       backCtx.font = '75pt "NotoSansHindi"';
-      drawWrappedText(backCtx, addressHindi || '—', hindiX, hindiY, 1800, 120);
+      drawWrappedText(backCtx, addressHindi || '—', hindiX, hindiY, 1795, 120);
 
       // 🌐 English Address
       backCtx.font = '65pt Arial';
-      drawWrappedText(backCtx, addressEnglish || '—', englishX, englishY, 1800, 120);
+      drawWrappedText(backCtx, addressEnglish || '—', englishX, englishY, 1795, 120);
 
 
 
