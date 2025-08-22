@@ -361,9 +361,9 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
         }
 
       // 📌 You can now manually control these X/Y values 👇
-      const hindiX = 220;
+      const hindiX = 210;
       const hindiY = 705; // Adjust Hindi block starting Y
-      const englishX = 220;
+      const englishX = 210;
       const englishY = 1170; // Adjust English block starting Y
 
       // 🧾 Hindi Address
@@ -388,7 +388,7 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
 
         // 🔢 Aadhaar Number
         backCtx.font = 'bold 130pt Arial';
-        backCtx.fillText(aadhaar || '—', 947, 1590);
+        backCtx.fillText(aadhaar || '—', 947, 1600);
 
         // 🔑 VID (Back Side)
         backCtx.font = '60pt Arial';
