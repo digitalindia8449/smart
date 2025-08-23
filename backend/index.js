@@ -377,7 +377,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           const englishX = 210;
           const englishY = 1170;
 
-          backCtx.font = '75pt "NotoSansHindi"';
+          backCtx.font = '72pt "NotoSansHindi"';
           drawWrappedTextBack(
             backCtx,
             addressHindi || "—",
@@ -387,7 +387,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             120
           );
 
-          backCtx.font = "65pt Arial";
+          backCtx.font = "62pt Arial";
           drawWrappedTextBack(
             backCtx,
             addressEnglish || "—",
