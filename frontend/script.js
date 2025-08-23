@@ -8,6 +8,13 @@ const cardFlipper = document.getElementById("cardFlipper");
 const toast = document.getElementById("toast");
 const darkToggle = document.getElementById("darkToggle");
 
+// keep track of uploaded base name for naming the PDF
+let uploadedBaseName = "";
+
+// to remember generated image paths for PDF endpoint
+let generatedFrontPath = "";
+let generatedBackPath = "";
+
 // DARK MODE
 if (localStorage.getItem("theme") === "dark") {
   darkToggle.checked = true;
@@ -33,11 +40,25 @@ function showToast(message = "Success!") {
 
 // SET IMAGE STATE
 function setImageLoadState(img) {
-  // No blur logic now, just ensure image load errors are caught
   img.onload = null;
   img.onerror = () => {
     console.error("Failed to load image:", img.src);
   };
+}
+
+// Hide instructions smoothly (visible again on refresh)
+function hideInstructionsSmoothly() {
+  const box = document.getElementById("instructions");
+  if (!box) return;
+  box.style.opacity = "0";
+  box.style.transform = "translateY(-8px)";
+  box.addEventListener(
+    "transitionend",
+    () => {
+      box.style.display = "none";
+    },
+    { once: true }
+  );
 }
 
 // FORM SUBMISSION
@@ -48,11 +69,14 @@ form.addEventListener("submit", async (e) => {
   let passwordInput = document.getElementById("password");
   let passwordError = document.getElementById("passwordError");
 
-  // Take filename (without extension) as default password
-  let autoPassword = file.name.split(".")[0];
-  let password = passwordInput.value.trim() || autoPassword;
-
   if (!file) return;
+
+  // filename (without extension)
+  uploadedBaseName = file.name.split(".")[0];
+
+  // Take filename (without extension) as default password
+  let autoPassword = uploadedBaseName;
+  let password = passwordInput.value.trim() || autoPassword;
 
   const formData = new FormData();
   formData.append("aadhaar", file);
@@ -71,7 +95,6 @@ form.addEventListener("submit", async (e) => {
     const data = await res.json();
 
     if (data.error) {
-      // Show inline error instead of popup
       passwordError.textContent =
         "❌ Wrong password detected. Please enter it manually.";
       passwordError.style.display = "block";
@@ -90,6 +113,10 @@ form.addEventListener("submit", async (e) => {
       templateFront.src = base + data.downloadUrlFront;
       templateBack.src = base + data.downloadUrlBack;
 
+      // Remember server paths for PDF endpoint
+      generatedFrontPath = data.downloadUrlFront;
+      generatedBackPath = data.downloadUrlBack;
+
       // Then set image state
       setImageLoadState(templateFront);
       setImageLoadState(templateBack);
@@ -104,6 +131,9 @@ form.addEventListener("submit", async (e) => {
         new Promise((res) => (templateBack.onload = res)),
       ]);
 
+      // Smoothly hide the instruction box (returns on refresh)
+      hideInstructionsSmoothly();
+
       showToast("Aadhaar card generated successfully!");
     }
   } catch (err) {
@@ -113,5 +143,54 @@ form.addEventListener("submit", async (e) => {
     btnText.textContent = "Generate Aadhaar Card";
     spinner.classList.add("hidden");
     submitBtn.disabled = false;
+  }
+});
+
+// PDF GENERATION
+const pdfBtn = document.getElementById("pdfBtn");
+const pdfSpinner = document.getElementById("pdfSpinner");
+const pdfBtnText = document.getElementById("pdfBtnText");
+
+pdfBtn.addEventListener("click", async () => {
+  if (!generatedFrontPath || !generatedBackPath) return;
+
+  pdfBtn.disabled = true;
+  pdfSpinner.classList.remove("hidden");
+  pdfBtnText.textContent = "Creating PDF...";
+
+  try {
+    // Send only the pathnames the server can resolve
+    const payload = {
+      frontPath: new URL(window.location.origin + generatedFrontPath).pathname,
+      backPath: new URL(window.location.origin + generatedBackPath).pathname,
+      baseName: uploadedBaseName,
+    };
+
+    const res = await fetch("/generate-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error("PDF generation failed");
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${uploadedBaseName}-pdf.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error(e);
+    alert("Failed to generate PDF");
+  } finally {
+    pdfBtnText.textContent = "Download Aadhaar PDF";
+    pdfSpinner.classList.add("hidden");
+    pdfBtn.disabled = false;
   }
 });
