@@ -528,7 +528,7 @@ app.post("/generate-pdf", async (req, res) => {
     doc.image(frontAbs, xLeft, yCenter, { width: cardW, height: cardH });
     doc
       .rect(xLeft, yCenter, cardW, cardH)
-      .lineWidth(4)
+      .lineWidth(1)
       .strokeColor("black")
       .stroke();
 
