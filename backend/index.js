@@ -6,7 +6,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { createCanvas, loadImage, registerFont } = require('canvas');
 const gm = require('gm').subClass({ imageMagick: true });
-
+const PDFDocument = require('pdfkit'); // <-- NEW
 
 const app = express();
 app.use(cors());
@@ -40,7 +40,6 @@ const pdftotextPath = 'pdftotext';
 const pdfimagesPath = 'pdfimages';
 
 app.post('/upload', upload.single('aadhaar'), async (req, res) => {
-  
   console.log('UPLOAD RECEIVED');
   console.log('File:', req.file);
   console.log('Password:', req.body.password);
@@ -62,13 +61,11 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
   const txtPath = path.join(userDir, `${baseName}.txt`);
   const imagePrefix = path.join(userDir, `${baseName}_photo`);
 
-
-      exec(`${qpdfPath} --password=${password} --decrypt "${newOriginalPath}" "${decryptedPath}"`, (err, stdout, stderr) => {
-      if (err) {
-        console.error('❌ QPDF error:', stderr || err.message);
-        return res.status(400).json({ error: 'QPDF failed: ' + (stderr || err.message) });
-      }
-
+  exec(`${qpdfPath} --password=${password} --decrypt "${newOriginalPath}" "${decryptedPath}"`, (err, stdout, stderr) => {
+    if (err) {
+      console.error('❌ QPDF error:', stderr || err.message);
+      return res.status(400).json({ error: 'QPDF failed: ' + (stderr || err.message) });
+    }
 
     exec(`${pdftotextPath} "${decryptedPath}" "${txtPath}"`, (err) => {
       if (err) return res.status(500).json({ error: 'Text extraction failed.' });
@@ -76,97 +73,69 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
       const text = fs.readFileSync(txtPath, 'utf8');
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-      // ✅ Name from "To" section
-      // ✅ Name from "To" section
-        let hindiName = '';
-        let englishName = '';
-        const toIndex = lines.findIndex(line => /^To$/i.test(line));
+      // ✅ Name extraction
+      let hindiName = '';
+      let englishName = '';
+      const toIndex = lines.findIndex(line => /^To$/i.test(line));
 
-        if (toIndex !== -1 && toIndex + 2 < lines.length) {
+      if (toIndex !== -1 && toIndex + 2 < lines.length) {
 
-        // ✅ New advanced Unicode-safe Hindi cleaner
-       function cleanHindiText(raw) {
-        const isHindiChar = c => /[\u0900-\u097F]/.test(c);
-        const words = raw.trim().split(/\s+/);
+        function cleanHindiText(raw) {
+          const isHindiChar = c => /[\u0900-\u097F]/.test(c);
+          const words = raw.trim().split(/\s+/);
+          if (words.length <= 1) return raw.normalize('NFC');
 
-        if (words.length <= 1) return raw.normalize('NFC'); // No need to process
+          const firstWord = words[0];
+          const rest = words.slice(1).join(' ');
 
-        const firstWord = words[0];
-        const rest = words.slice(1).join(' ');
-
-        let cleaned = '';
-        let prevChar = '';
-        for (let i = 0; i < rest.length; i++) {
-          const char = rest[i];
-
-          if (char === ' ') {
-            const next = rest[i + 1] || '';
-            const next2 = rest[i + 2] || '';
-
-            if (
-              isHindiChar(prevChar) &&
-              isHindiChar(next) &&
-              next !== ' ' &&
-              (next2 !== ' ' || !isHindiChar(next2))
-            ) {
-              continue; // skip bad space
+          let cleaned = '';
+          let prevChar = '';
+          for (let i = 0; i < rest.length; i++) {
+            const char = rest[i];
+            if (char === ' ') {
+              const next = rest[i + 1] || '';
+              const next2 = rest[i + 2] || '';
+              if (isHindiChar(prevChar) && isHindiChar(next) && next !== ' ' && (next2 !== ' ' || !isHindiChar(next2))) {
+                continue; // skip bad space
+              } else {
+                cleaned += ' ';
+              }
             } else {
-              cleaned += ' ';
+              cleaned += char;
+              prevChar = char;
             }
-          } else {
-            cleaned += char;
-            prevChar = char;
           }
+          return `${firstWord} ${cleaned}`.replace(/\s+/g, ' ').trim().normalize('NFC');
         }
 
-        return `${firstWord} ${cleaned}`.replace(/\s+/g, ' ').trim().normalize('NFC');
-      }
-
-     // ✅ Removes 3rd space only if it splits Hindi characters (e.g. सुधीर कु मार → सुधीर कुमार)
         function fixThirdHindiSpace(line) {
           const isHindiChar = c => /[\u0900-\u097F]/.test(c);
           let spaceCount = 0;
           let result = '';
           let i = 0;
-
           while (i < line.length) {
             const char = line[i];
-
             if (char === ' ') {
               spaceCount++;
               if (spaceCount === 3) {
                 const prevChar = line[i - 1];
                 const nextChar = line[i + 1] || '';
                 if (isHindiChar(prevChar) && isHindiChar(nextChar)) {
-                  // Skip 3rd space if splitting valid Hindi
                   i++; // skip this space
                   continue;
                 }
               }
             }
-
             result += char;
             i++;
           }
-
           return result.replace(/\s+/g, ' ').trim();
         }
 
-
-
-
-
         const rawHindi = lines[toIndex + 1].trim();
         hindiName = cleanHindiText(rawHindi);
-
-        // ✅ Clean English name normally
         englishName = lines[toIndex + 2].replace(/\s+/g, ' ').trim();
-
-
       }
-
-
-
 
       const dob = (text.match(/DOB[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/) || [])[1] || '';
       const genderMatch = text.match(/(MALE|FEMALE|पुरुष|महिला)/i);
@@ -180,7 +149,6 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
       const issueDate = (text.match(/issued[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/) || [])[1] || '';
       const detailsDate = (text.match(/Details\s+as\s+on[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/) || [])[1] || '';
 
-
       let addressHindi = '', addressEnglish = '';
       const pinRegex = /[-–]\s*\d{6}$/;
       const hindiStartIndex = lines.findIndex(line => /पता[:]?/i.test(line));
@@ -192,7 +160,7 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
           let cleaned = lines[i].replace(/\s+/g, ' ').replace(/,+$/, '').trim();
           if (cleaned) {
             if (hindiLines.length === 0) {
-              cleaned = fixThirdHindiSpace(cleaned); // ✅ Remove 3rd space if it's breaking syllable
+              cleaned = fixThirdHindiSpace(cleaned);
             }
             hindiLines.push(cleaned);
           }
@@ -201,62 +169,52 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
         addressHindi = hindiLines.join(', ');
       }
 
-
-
       if (englishStartIndex !== -1) {
-          const englishLines = [];
-          for (let i = englishStartIndex + 1; i < lines.length; i++) {
-            const cleaned = lines[i].replace(/\s+/g, ' ').replace(/,+$/, '').trim();
-            if (cleaned) englishLines.push(cleaned);
-            if (pinRegex.test(lines[i])) break;
-          }
-          addressEnglish = englishLines.join(', ');
+        const englishLines = [];
+        for (let i = englishStartIndex + 1; i < lines.length; i++) {
+          const cleaned = lines[i].replace(/\s+/g, ' ').replace(/,+$/, '').trim();
+          if (cleaned) englishLines.push(cleaned);
+          if (pinRegex.test(lines[i])) break;
         }
-
-
+        addressEnglish = englishLines.join(', ');
+      }
 
       const cmdImage = `${pdfimagesPath} -j "${decryptedPath}" "${imagePrefix}"`;
       exec(cmdImage, async () => {
         const allFiles = fs.readdirSync(userDir);
 
-               const qrFilename = allFiles.find(f =>
-                  f.startsWith(baseName) && f.includes('photo-000') && f.endsWith('.ppm')
-                );
-                let qrPath = '';
+        const qrFilename = allFiles.find(f =>
+          f.startsWith(baseName) && f.includes('photo-000') && f.endsWith('.ppm')
+        );
+        let qrPath = '';
 
-                if (qrFilename) {
-                  const ppmPath = path.join(userDir, qrFilename);
-                  qrPath = path.join(userDir, `${baseName}_qr.png`);
+        if (qrFilename) {
+          const ppmPath = path.join(userDir, qrFilename);
+          qrPath = path.join(userDir, `${baseName}_qr.png`);
+          const convertCmd = `convert "${ppmPath}" "${qrPath}"`;
 
-                  // Use ImageMagick CLI to convert .ppm → .png
-                  const convertCmd = `convert "${ppmPath}" "${qrPath}"`;
-
-                  try {
-                    await new Promise((resolve, reject) => {
-                      exec(convertCmd, (err, stdout, stderr) => {
-                        if (err) {
-                          console.error('❌ QR conversion failed (magick):', stderr || err.message);
-                          qrPath = '';
-                          return reject(err);
-                        }
-                        console.log('✅ QR converted with ImageMagick:', qrPath);
-                        resolve();
-                      });
-                    });
-                  } catch (e) {
-                    qrPath = '';
-                  }
+          try {
+            await new Promise((resolve, reject) => {
+              exec(convertCmd, (err, stdout, stderr) => {
+                if (err) {
+                  console.error('❌ QR conversion failed (magick):', stderr || err.message);
+                  qrPath = '';
+                  return reject(err);
                 }
-
-
+                console.log('✅ QR converted with ImageMagick:', qrPath);
+                resolve();
+              });
+            });
+          } catch (e) {
+            qrPath = '';
+          }
+        }
 
         const photoFilename =
-        allFiles.find(f => f.startsWith(baseName) && f.includes('photo-007') && f.endsWith('.jpg')) ||
-        allFiles.find(f => f.startsWith(baseName) && f.includes('photo-010') && f.endsWith('.jpg'));
+          allFiles.find(f => f.startsWith(baseName) && f.includes('photo-007') && f.endsWith('.jpg')) ||
+          allFiles.find(f => f.startsWith(baseName) && f.includes('photo-010') && f.endsWith('.jpg'));
 
         const photoPath = photoFilename ? path.join(userDir, photoFilename) : '';
-
-        // ✅ Use child template if photo-010 is used
         const isChild = photoFilename && photoFilename.includes('photo-010');
 
         const frontTemplatePath = isChild
@@ -266,7 +224,6 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
         const backTemplatePath = isChild
           ? path.join(__dirname, '..', 'template', 'child_back.png')
           : path.join(__dirname, '..', 'template', 'back.png');
-
 
         const outputName = `generated-${Date.now()}.png`;
         const outputPath = path.join(userDir, outputName);
@@ -296,52 +253,21 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
         ctx.font = '60pt Arial';
         ctx.fillText(vid || '—', 1255, 1703);
 
-        // Draw only the issued date (vertically) since label is already on template
+        // vertical issued date
         ctx.save();
-        ctx.translate(140, 820); // Adjust X (left-right), Y (up-down) as needed
-        ctx.rotate(-Math.PI / 2); // Rotate 90° counterclockwise
+        ctx.translate(140, 820);
+        ctx.rotate(-Math.PI / 2);
         ctx.font = 'bold 40pt sans-serif';
         ctx.fillStyle = '#000';
         ctx.fillText(issueDate, 0, 0);
         ctx.restore();
 
-
-
-        // 🖼 Profile photo shifted slightly right
+        // profile photo
         if (photoPath && fs.existsSync(photoPath)) {
           const userPhoto = await loadImage(photoPath);
           ctx.drawImage(userPhoto, 220, 510, 687, 862);
         }
-        
-        function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
-        const words = text.split(' ');
-        let line = '';
-        for (let n = 0; n < words.length; n++) {
-          const testLine = line + words[n] + ' ';
-          const metrics = ctx.measureText(testLine);
-          const testWidth = metrics.width;
-          if (testWidth > maxWidth && n > 0) {
-            ctx.fillText(line, x, y);
-            line = words[n] + ' ';
-            y += lineHeight;
-          } else {
-            line = testLine;
-          }
-        }
-        ctx.fillText(line, x, y);
-      }
 
-
-                // 📌 Load back template
-        const backBase = await loadImage(backTemplatePath);
-        const backCanvas = createCanvas(backBase.width, backBase.height);
-        const backCtx = backCanvas.getContext('2d');
-        backCtx.drawImage(backBase, 0, 0);
-
-        backCtx.fillStyle = '#000';
-        backCtx.textAlign = 'left';
-
-        // ✍️ Wrap function (keep this somewhere above if not already defined)
         function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
           const words = text.split(' ');
           let line = '';
@@ -360,47 +286,64 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
           ctx.fillText(line, x, y);
         }
 
-      // 📌 You can now manually control these X/Y values 👇
-      const hindiX = 210;
-      const hindiY = 705; // Adjust Hindi block starting Y
-      const englishX = 210;
-      const englishY = 1170; // Adjust English block starting Y
+        // back
+        const backBase = await loadImage(backTemplatePath);
+        const backCanvas = createCanvas(backBase.width, backBase.height);
+        const backCtx = backCanvas.getContext('2d');
+        backCtx.drawImage(backBase, 0, 0);
 
-      // 🧾 Hindi Address
-      backCtx.font = '75pt "NotoSansHindi"';
-      drawWrappedText(backCtx, addressHindi || '—', hindiX, hindiY, 1950, 120);
+        backCtx.fillStyle = '#000';
+        backCtx.textAlign = 'left';
 
-      // 🌐 English Address
-      backCtx.font = '65pt Arial';
-      drawWrappedText(backCtx, addressEnglish || '—', englishX, englishY, 1950, 120);
+        function drawWrappedTextBack(ctx, text, x, y, maxWidth, lineHeight) {
+          const words = text.split(' ');
+          let line = '';
+          for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            const testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+              ctx.fillText(line, x, y);
+              line = words[n] + ' ';
+              y += lineHeight;
+            } else {
+              line = testLine;
+            }
+          }
+          ctx.fillText(line, x, y);
+        }
 
+        const hindiX = 210;
+        const hindiY = 705;
+        const englishX = 210;
+        const englishY = 1170;
 
+        backCtx.font = '75pt "NotoSansHindi"';
+        drawWrappedTextBack(backCtx, addressHindi || '—', hindiX, hindiY, 1950, 120);
 
-        // 🗓️ Download Date
+        backCtx.font = '65pt Arial';
+        drawWrappedTextBack(backCtx, addressEnglish || '—', englishX, englishY, 1950, 120);
+
         backCtx.save();
-        backCtx.translate(145, 870); // Adjust X (left-right), Y (up-down) as needed
-        backCtx.rotate(-Math.PI / 2); // Rotate 90° counterclockwise
+        backCtx.translate(145, 870);
+        backCtx.rotate(-Math.PI / 2);
         backCtx.font = 'bold 40pt sans-serif';
         backCtx.fillStyle = '#000';
         backCtx.fillText(detailsDate, 0, 0);
         backCtx.restore();
-        
 
-        // 🔢 Aadhaar Number
         backCtx.font = 'bold 130pt Arial';
         backCtx.fillText(aadhaar || '—', 947, 1600);
 
-        // 🔑 VID (Back Side)
         backCtx.font = '60pt Arial';
         backCtx.fillText(vid || '—', 1245, 1688);
 
-       if (qrPath && fs.existsSync(qrPath)) {
-        const qrImg = await loadImage(qrPath);
-        backCtx.drawImage(qrImg, 2103, 463, 1000,1000); // adjust position & size
-      }
+        if (qrPath && fs.existsSync(qrPath)) {
+          const qrImg = await loadImage(qrPath);
+          backCtx.drawImage(qrImg, 2103, 463, 1000, 1000);
+        }
 
-
-        // 💾 Save back image
+        // save images
         const backOutputName = `back-${Date.now()}.png`;
         const backOutputPath = path.join(userDir, backOutputName);
 
@@ -416,7 +359,7 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
         });
 
         Promise.all([frontDone, backDone]).then(() => {
-          // ✅ Send response first
+          // respond
           res.json({
             hindiName, englishName, dob, gender, mobile, aadhaar, vid, issueDate, detailsDate,
             photoUrl: photoFilename ? `/images/${baseName}/${photoFilename}` : '',
@@ -424,7 +367,7 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
             downloadUrlBack: `/images/${baseName}/${backOutputName}`
           });
 
-          // ✅ After sending response, clean up other files
+          // cleanup others
           const keepFiles = [outputName, backOutputName];
           fs.readdir(userDir, (err, files) => {
             if (err) return console.error('❌ Cleanup error:', err);
@@ -438,15 +381,70 @@ app.post('/upload', upload.single('aadhaar'), async (req, res) => {
             });
           });
         });
-
-
-
-
       });
     });
   });
 });
 
+// ---------- NEW ROUTE: Generate A4 PDF with 85mm x 55mm front/back ----------
+app.post('/generate-pdf', async (req, res) => {
+  try {
+    const { frontPath, backPath, baseName } = req.body;
+
+    if (!frontPath || !backPath || !baseName) {
+      return res.status(400).json({ error: 'Missing front/back paths or baseName' });
+    }
+
+    // Convert URL path -> absolute filesystem path (restrict to /images/*)
+    function toAbs(p) {
+      // strip origin if sent accidentally
+      const onlyPath = p.replace(/^https?:\/\/[^/]+/i, '');
+      if (!onlyPath.startsWith('/images/')) {
+        throw new Error('Invalid path');
+      }
+      const rel = onlyPath.replace(/^\/images\//, '');
+      const abs = path.join(uploadDir, rel);
+      return abs;
+    }
+
+    const frontAbs = toAbs(frontPath);
+    const backAbs = toAbs(backPath);
+
+    if (!fs.existsSync(frontAbs) || !fs.existsSync(backAbs)) {
+      return res.status(404).json({ error: 'Images not found' });
+    }
+
+    // A4 portrait: 210mm x 297mm
+    const mm = v => (v * 72) / 25.4; // mm -> pt
+    const a4 = { width: mm(210), height: mm(297) };
+
+    // Card size: 85mm x 55mm
+    const cardW = mm(85);
+    const cardH = mm(55);
+
+    // Place side-by-side, centered horizontally, centered vertically
+    // Left margin = (210 - 170)/2 = 20mm => xLeft = 20mm, xRight = 20 + 85 = 105mm
+    const xLeft = mm(20);
+    const xRight = mm(105);
+    const yCenter = (a4.height - cardH) / 2;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${baseName}-pdf.pdf"`);
+
+    const doc = new PDFDocument({ size: [a4.width, a4.height], margin: 0 });
+    doc.pipe(res);
+
+    // front on left, back on right
+    doc.image(frontAbs, xLeft, yCenter, { width: cardW, height: cardH });
+    doc.image(backAbs,  xRight, yCenter, { width: cardW, height: cardH });
+
+    doc.end();
+  } catch (e) {
+    console.error('PDF generation error:', e);
+    res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+// ---------------------------------------------------------------------------
 
 const frontendPath = path.join(__dirname, '..', 'frontend');
 app.use(express.static(frontendPath));
@@ -454,6 +452,5 @@ app.use(express.static(frontendPath));
 app.get('/', (req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
-
 
 app.listen(5000, () => console.log('✅ Server running at http://localhost:5000'));
