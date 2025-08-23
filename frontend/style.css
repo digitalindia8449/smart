@@ -434,3 +434,25 @@ body.dark .toast {
 
 /* ensure spinner utility exists */
 .spinner.hidden { display: none; }
+
+#submitBtn {
+  background: #1a73e8;        /* blue button */
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  width: 100%;                /* full width, easier to see */
+  transition: background 0.3s ease;
+}
+
+#submitBtn:hover {
+  background: #155ab6;
+}
