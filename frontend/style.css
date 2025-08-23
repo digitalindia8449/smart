@@ -267,6 +267,7 @@ button:active {
 
 .flip-card-front img,
 .flip-card-back img {
+  margin-top: 150px;
   width: 100%;
   border: 1px solid #ccc;
   border-radius: 16px;
@@ -435,7 +436,7 @@ body.dark .toast {
 /* ensure spinner utility exists */
 .spinner.hidden { display: none; }
 
-#submitBtn {
+#pdfBtn {
   background: #1a73e8;        /* blue button */
   color: white;
   border: none;
@@ -453,6 +454,6 @@ body.dark .toast {
   transition: background 0.3s ease;
 }
 
-#submitBtn:hover {
+#pdfBtn:hover {
   background: #155ab6;
 }
