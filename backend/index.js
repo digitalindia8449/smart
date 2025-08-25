@@ -398,83 +398,30 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             ctx.fillText(line, x, y);
           }
 
-          // --- Address bounding boxes (LEFT of QR) ---
-          const QR_X = 2103; // QR at x=2103, w=1000
-          const ADDRESS_LEFT = 210; // left margin
-          const RIGHT_MARGIN = 40; // gap before QR
-          const ADDRESS_WIDTH = QR_X - ADDRESS_LEFT - RIGHT_MARGIN; // 1853 px
+          const hindiX = 210;
+          const hindiY = 705;
+          const englishX = 210;
+          const englishY = 1170;
 
-          // Safe bottom so English never reaches Aadhaar number (number baseline ~1600)
-          const SAFE_BOTTOM = 1500;
-
-          // Positions tuned to avoid clipping under headers and above the number
-          const hindiY = 650; // was 750
-          const englishY = 1150; // was 1150
-
-          // Font sizes a bit smaller to fit better
-          const HINDI_FONT = '70pt "NotoSansHindi"'; // was 72pt
-          const EN_FONT = "60pt Arial"; // was 62pt
-
-          // Line heights matched to new font sizes
-          const HINDI_LH = 88; // was 100
-          const EN_LH = 84; // was 95
-
-          // Heights: clipped so nothing can spill into Aadhaar number area
-          const HINDI_TOP_PAD = 80; // extra room for matras/overbars
-          const ENG_TOP_PAD = 70;
-
-          const HINDI_HEIGHT = Math.max(
-            0,
-            Math.min(320, SAFE_BOTTOM - (hindiY - HINDI_TOP_PAD))
-          );
-          const ENGLISH_HEIGHT = Math.max(
-            0,
-            Math.min(280, SAFE_BOTTOM - (englishY - ENG_TOP_PAD))
-          );
-
-          // --- HINDI ADDRESS ---
-          backCtx.save();
-          backCtx.beginPath();
-          backCtx.rect(
-            ADDRESS_LEFT,
-            hindiY - HINDI_TOP_PAD,
-            ADDRESS_WIDTH,
-            HINDI_HEIGHT
-          );
-          backCtx.clip();
-
-          backCtx.font = HINDI_FONT;
+          backCtx.font = '72pt "NotoSansHindi"';
           drawWrappedTextBack(
             backCtx,
             addressHindi || "—",
-            ADDRESS_LEFT,
+            hindiX,
             hindiY,
-            ADDRESS_WIDTH,
-            HINDI_LH
+            1950,
+            120
           );
-          backCtx.restore();
 
-          // --- ENGLISH ADDRESS ---
-          backCtx.save();
-          backCtx.beginPath();
-          backCtx.rect(
-            ADDRESS_LEFT,
-            englishY - ENG_TOP_PAD,
-            ADDRESS_WIDTH,
-            ENGLISH_HEIGHT
-          );
-          backCtx.clip();
-
-          backCtx.font = EN_FONT;
+          backCtx.font = "62pt Arial";
           drawWrappedTextBack(
             backCtx,
             addressEnglish || "—",
-            ADDRESS_LEFT,
+            englishX,
             englishY,
-            ADDRESS_WIDTH,
-            EN_LH
+            1950,
+            120
           );
-          backCtx.restore();
 
           backCtx.save();
           backCtx.translate(145, 870);
