@@ -189,22 +189,47 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           /Address[:]?/i.test(line)
         );
 
+        // Joins any SINGLE Devanagari letter that got split out between words
+        // Only joins when the previous chunk ends with a vowel matra (े, ो, ा, etc.)
+        // Example: "ठे र कादरी" -> "ठेर कादरी", but "घर राम" stays "घर राम"
+        function fixIsolatedHindiLetterAfterMatra(line) {
+          const devanagari = /[\u0900-\u097F]/;
+          const matraOrSign = /[ािीुूृेैोौँंॅ]/; // common vowel signs + nasalizations
+          let prev;
+          do {
+            prev = line;
+            line = line.replace(
+              new RegExp(
+                // group1 ends with a matra/sign, then spaces, then a single Devanagari letter,
+                // then a space and next token also starts with Devanagari
+                "([\\u0900-\\u097F]*" +
+                  matraOrSign.source +
+                  ")\\s+([\\u0900-\\u097F])\\s+(?=[\\u0900-\\u097F])",
+                "g"
+              ),
+              "$1$2 " // join the single letter to the left word, keep the space before next word
+            );
+          } while (line !== prev);
+          return line;
+        }
         if (hindiStartIndex !== -1) {
           const hindiLines = [];
           for (let i = hindiStartIndex + 1; i < lines.length; i++) {
             let cleaned = lines[i]
-              .replace(/\s+/g, " ") // normalize spaces only
-              .replace(/,+$/, "") // strip trailing commas
+              .replace(/\s+/g, " ") // safe: collapse multiple spaces
+              .replace(/,+$/, "") // safe: drop trailing commas only
               .trim();
 
             if (cleaned) {
+              // ✅ critical fix: remove artifacts like "ठे र" universally
+              cleaned = fixIsolatedHindiLetterAfterMatra(cleaned);
               hindiLines.push(cleaned);
             }
 
             if (pinRegex.test(lines[i])) break;
           }
 
-          // ✅ Preserve exactly as original
+          // Keep exactly what PDF had (no other “smart” fixes)
           addressHindi = hindiLines.join(", ");
         }
 
