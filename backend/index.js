@@ -403,13 +403,13 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           const englishX = 210;
           const englishY = 1170;
 
-          backCtx.font = '72pt "NotoSansHindi"';
+          backCtx.font = '70pt "NotoSansHindi"';
           drawWrappedTextBack(
             backCtx,
             addressHindi || "—",
             hindiX,
             hindiY,
-            1950,
+            1900,
             120
           );
 
@@ -419,7 +419,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             addressEnglish || "—",
             englishX,
             englishY,
-            1950,
+            1900,
             120
           );
 
