@@ -399,34 +399,58 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           }
 
           // --- Address bounding boxes (LEFT of QR) ---
-          // --- Address bounding boxes (LEFT of QR) ---
-          const QR_X = 2103;
-          const ADDRESS_LEFT = 210;
-          const RIGHT_MARGIN = 40;
+          const QR_X = 2103; // QR at x=2103, w=1000
+          const ADDRESS_LEFT = 210; // left margin
+          const RIGHT_MARGIN = 40; // gap before QR
           const ADDRESS_WIDTH = QR_X - ADDRESS_LEFT - RIGHT_MARGIN; // 1853 px
 
-          // Vertical positions (tuned to avoid clipping/overlap)
-          const hindiY = 750; // was 705
-          const englishY = 1150; // was 1170
+          // Safe bottom so English never reaches Aadhaar number (number baseline ~1600)
+          const SAFE_BOTTOM = 1500;
 
-          // Heights (limit so they never touch the Aadhaar number at y=1600)
-          const HINDI_HEIGHT = 300;
-          const ENGLISH_HEIGHT = 300;
+          // Positions tuned to avoid clipping under headers and above the number
+          const hindiY = 820; // was 750
+          const englishY = 1180; // was 1150
+
+          // Font sizes a bit smaller to fit better
+          const HINDI_FONT = '66pt "NotoSansHindi"'; // was 72pt
+          const EN_FONT = "56pt Arial"; // was 62pt
+
+          // Line heights matched to new font sizes
+          const HINDI_LH = 88; // was 100
+          const EN_LH = 84; // was 95
+
+          // Heights: clipped so nothing can spill into Aadhaar number area
+          const HINDI_TOP_PAD = 80; // extra room for matras/overbars
+          const ENG_TOP_PAD = 70;
+
+          const HINDI_HEIGHT = Math.max(
+            0,
+            Math.min(320, SAFE_BOTTOM - (hindiY - HINDI_TOP_PAD))
+          );
+          const ENGLISH_HEIGHT = Math.max(
+            0,
+            Math.min(280, SAFE_BOTTOM - (englishY - ENG_TOP_PAD))
+          );
 
           // --- HINDI ADDRESS ---
           backCtx.save();
           backCtx.beginPath();
-          backCtx.rect(ADDRESS_LEFT, hindiY - 50, ADDRESS_WIDTH, HINDI_HEIGHT);
+          backCtx.rect(
+            ADDRESS_LEFT,
+            hindiY - HINDI_TOP_PAD,
+            ADDRESS_WIDTH,
+            HINDI_HEIGHT
+          );
           backCtx.clip();
 
-          backCtx.font = '72pt "NotoSansHindi"';
+          backCtx.font = HINDI_FONT;
           drawWrappedTextBack(
             backCtx,
             addressHindi || "—",
             ADDRESS_LEFT,
             hindiY,
             ADDRESS_WIDTH,
-            100
+            HINDI_LH
           );
           backCtx.restore();
 
@@ -435,20 +459,20 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           backCtx.beginPath();
           backCtx.rect(
             ADDRESS_LEFT,
-            englishY - 40,
+            englishY - ENG_TOP_PAD,
             ADDRESS_WIDTH,
             ENGLISH_HEIGHT
           );
           backCtx.clip();
 
-          backCtx.font = "62pt Arial";
+          backCtx.font = EN_FONT;
           drawWrappedTextBack(
             backCtx,
             addressEnglish || "—",
             ADDRESS_LEFT,
             englishY,
             ADDRESS_WIDTH,
-            95
+            EN_LH
           );
           backCtx.restore();
 
