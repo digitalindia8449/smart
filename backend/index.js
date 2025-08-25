@@ -408,12 +408,12 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           const SAFE_BOTTOM = 1500;
 
           // Positions tuned to avoid clipping under headers and above the number
-          const hindiY = 750; // was 750
+          const hindiY = 650; // was 750
           const englishY = 1150; // was 1150
 
           // Font sizes a bit smaller to fit better
-          const HINDI_FONT = '66pt "NotoSansHindi"'; // was 72pt
-          const EN_FONT = "56pt Arial"; // was 62pt
+          const HINDI_FONT = '70pt "NotoSansHindi"'; // was 72pt
+          const EN_FONT = "60pt Arial"; // was 62pt
 
           // Line heights matched to new font sizes
           const HINDI_LH = 88; // was 100
