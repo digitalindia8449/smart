@@ -193,17 +193,18 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           const hindiLines = [];
           for (let i = hindiStartIndex + 1; i < lines.length; i++) {
             let cleaned = lines[i]
-              .replace(/\s+/g, " ")
-              .replace(/,+$/, "")
+              .replace(/\s+/g, " ") // normalize spaces only
+              .replace(/,+$/, "") // strip trailing commas
               .trim();
+
             if (cleaned) {
-              if (hindiLines.length === 0) {
-                cleaned = fixThirdHindiSpace(cleaned);
-              }
               hindiLines.push(cleaned);
             }
+
             if (pinRegex.test(lines[i])) break;
           }
+
+          // ✅ Preserve exactly as original
           addressHindi = hindiLines.join(", ");
         }
 
