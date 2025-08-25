@@ -399,23 +399,24 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           }
 
           // --- Address bounding boxes (LEFT of QR) ---
-          const QR_X = 2103; // from qrImg placement
-          const ADDRESS_LEFT = 210; // left margin same as before
-          const RIGHT_MARGIN = 40; // padding before QR
-          const ADDRESS_WIDTH = QR_X - ADDRESS_LEFT - RIGHT_MARGIN; // = 1853 px
+          // --- Address bounding boxes (LEFT of QR) ---
+          const QR_X = 2103;
+          const ADDRESS_LEFT = 210;
+          const RIGHT_MARGIN = 40;
+          const ADDRESS_WIDTH = QR_X - ADDRESS_LEFT - RIGHT_MARGIN; // 1853 px
 
-          // Vertical positions (same as before)
-          const hindiY = 705;
-          const englishY = 1170;
+          // Vertical positions (tuned to avoid clipping/overlap)
+          const hindiY = 750; // was 705
+          const englishY = 1150; // was 1170
 
-          // Optional bounding box heights (clip ensures no spill)
-          const HINDI_HEIGHT = 430;
-          const ENGLISH_HEIGHT = 430;
+          // Heights (limit so they never touch the Aadhaar number at y=1600)
+          const HINDI_HEIGHT = 300;
+          const ENGLISH_HEIGHT = 300;
 
           // --- HINDI ADDRESS ---
           backCtx.save();
           backCtx.beginPath();
-          backCtx.rect(ADDRESS_LEFT, hindiY - 70, ADDRESS_WIDTH, HINDI_HEIGHT);
+          backCtx.rect(ADDRESS_LEFT, hindiY - 50, ADDRESS_WIDTH, HINDI_HEIGHT);
           backCtx.clip();
 
           backCtx.font = '72pt "NotoSansHindi"';
@@ -425,7 +426,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             ADDRESS_LEFT,
             hindiY,
             ADDRESS_WIDTH,
-            120
+            100
           );
           backCtx.restore();
 
@@ -434,7 +435,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           backCtx.beginPath();
           backCtx.rect(
             ADDRESS_LEFT,
-            englishY - 60,
+            englishY - 40,
             ADDRESS_WIDTH,
             ENGLISH_HEIGHT
           );
@@ -447,7 +448,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             ADDRESS_LEFT,
             englishY,
             ADDRESS_WIDTH,
-            120
+            95
           );
           backCtx.restore();
 
