@@ -398,9 +398,9 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             ctx.fillText(line, x, y);
           }
 
-          const hindiX = 210;
+          const hindiX = 200;
           const hindiY = 705;
-          const englishX = 210;
+          const englishX = 200;
           const englishY = 1170;
 
           backCtx.font = '70pt "NotoSansHindi"';
@@ -419,7 +419,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             addressEnglish || "—",
             englishX,
             englishY,
-            1900,
+            1950,
             120
           );
 
