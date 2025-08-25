@@ -398,30 +398,58 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             ctx.fillText(line, x, y);
           }
 
-          const hindiX = 210;
+          // --- Address bounding boxes (LEFT of QR) ---
+          const QR_X = 2103; // from qrImg placement
+          const ADDRESS_LEFT = 210; // left margin same as before
+          const RIGHT_MARGIN = 40; // padding before QR
+          const ADDRESS_WIDTH = QR_X - ADDRESS_LEFT - RIGHT_MARGIN; // = 1853 px
+
+          // Vertical positions (same as before)
           const hindiY = 705;
-          const englishX = 210;
           const englishY = 1170;
+
+          // Optional bounding box heights (clip ensures no spill)
+          const HINDI_HEIGHT = 430;
+          const ENGLISH_HEIGHT = 430;
+
+          // --- HINDI ADDRESS ---
+          backCtx.save();
+          backCtx.beginPath();
+          backCtx.rect(ADDRESS_LEFT, hindiY - 70, ADDRESS_WIDTH, HINDI_HEIGHT);
+          backCtx.clip();
 
           backCtx.font = '72pt "NotoSansHindi"';
           drawWrappedTextBack(
             backCtx,
             addressHindi || "—",
-            hindiX,
+            ADDRESS_LEFT,
             hindiY,
-            1950,
+            ADDRESS_WIDTH,
             120
           );
+          backCtx.restore();
+
+          // --- ENGLISH ADDRESS ---
+          backCtx.save();
+          backCtx.beginPath();
+          backCtx.rect(
+            ADDRESS_LEFT,
+            englishY - 60,
+            ADDRESS_WIDTH,
+            ENGLISH_HEIGHT
+          );
+          backCtx.clip();
 
           backCtx.font = "62pt Arial";
           drawWrappedTextBack(
             backCtx,
             addressEnglish || "—",
-            englishX,
+            ADDRESS_LEFT,
             englishY,
-            1950,
+            ADDRESS_WIDTH,
             120
           );
+          backCtx.restore();
 
           backCtx.save();
           backCtx.translate(145, 870);
