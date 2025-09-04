@@ -51,6 +51,51 @@ function yearOf(s) {
   return m ? m[0] : "";
 }
 
+// Prefer child (photo-010) if present, else adult (photo-007), else any photo-0xx.jpg
+function pickPhotoFilename(files, baseName) {
+  const jpgs = files.filter(
+    (f) =>
+      f.startsWith(baseName) &&
+      f.includes("_photo-") &&
+      f.toLowerCase().endsWith(".jpg")
+  );
+  const child = jpgs.find((f) => f.includes("photo-010"));
+  if (child) return child;
+  const adult = jpgs.find((f) => f.includes("photo-007"));
+  if (adult) return adult;
+  // fallback: pick the smallest index photo-0xx.jpg
+  const any = jpgs
+    .map((f) => ({
+      f,
+      n: parseInt((f.match(/photo-(\d+)/) || [0, 999])[1], 10),
+    }))
+    .sort((a, b) => a.n - b.n)[0];
+  return any ? any.f : "";
+}
+
+function ppmQrToPngIfAny(userDir, baseName) {
+  return new Promise((resolve) => {
+    const files = fs.readdirSync(userDir);
+    const ppmQr = files.find(
+      (f) =>
+        f.startsWith(baseName) &&
+        f.includes("photo-000") &&
+        f.toLowerCase().endsWith(".ppm")
+    );
+    if (!ppmQr) return resolve(""); // nothing to do
+
+    const ppmPath = path.join(userDir, ppmQr);
+    const outPng = path.join(userDir, `${baseName}_qr.png`);
+    exec(`convert "${ppmPath}" "${outPng}"`, (err, _so, se) => {
+      if (err) {
+        console.warn("QR convert failed:", se || err.message);
+        return resolve("");
+      }
+      resolve(outPng);
+    });
+  });
+}
+
 app.post("/upload", upload.single("aadhaar"), async (req, res) => {
   console.log("UPLOAD RECEIVED");
   console.log("File:", req.file);
@@ -663,23 +708,45 @@ app.post("/finalize-dob", async (req, res) => {
       });
     }
 
-    // Re-detect photo/templates based on files present
-    const allFiles = fs.readdirSync(userDir);
-    const photoFilename =
-      allFiles.find(
-        (f) =>
-          f.startsWith(baseName) &&
-          f.includes("photo-007") &&
-          f.endsWith(".jpg")
-      ) ||
-      allFiles.find(
-        (f) =>
-          f.startsWith(baseName) &&
-          f.includes("photo-010") &&
-          f.endsWith(".jpg")
-      );
+    // Ensure photos exist; if not, extract now from decrypted PDF
+    const decryptedPath = path.join(userDir, `${baseName}_decrypted.pdf`);
+    const imagePrefix = path.join(userDir, `${baseName}_photo`);
+
+    let filesNow = fs.readdirSync(userDir);
+    let foundAnyPhoto = filesNow.some(
+      (f) =>
+        f.startsWith(baseName) &&
+        f.includes("_photo-") &&
+        f.toLowerCase().endsWith(".jpg")
+    );
+
+    // If photos not present (common in YOB flow), run pdfimages now
+    if (!foundAnyPhoto) {
+      await new Promise((resolve, reject) => {
+        const cmd = `${pdfimagesPath} -j "${decryptedPath}" "${imagePrefix}"`;
+        exec(cmd, (err, _so, se) => {
+          if (err) {
+            console.error(
+              "pdfimages error in /finalize-dob:",
+              se || err.message
+            );
+            return reject(new Error("Failed to extract images from PDF"));
+          }
+          resolve();
+        });
+      });
+      filesNow = fs.readdirSync(userDir);
+    }
+
+    // Convert QR if ppm exists (creates `${baseName}_qr.png` if possible)
+    await ppmQrToPngIfAny(userDir, baseName);
+
+    // Choose the correct candidate photo and template (child vs adult)
+    const photoFilename = pickPhotoFilename(filesNow, baseName);
     const photoPath = photoFilename ? path.join(userDir, photoFilename) : "";
-    const isChild = photoFilename && photoFilename.includes("photo-010");
+    const isChild = Boolean(
+      photoFilename && photoFilename.includes("photo-010")
+    );
 
     const frontTemplatePath = isChild
       ? path.join(__dirname, "..", "template", "child.png")
