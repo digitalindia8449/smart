@@ -15,8 +15,7 @@ const dobInput = document.getElementById("dobInput");
 const dobError = document.getElementById("dobError");
 const dobCancel = document.getElementById("dobCancel");
 const dobConfirm = document.getElementById("dobConfirm");
-const dobSpinner = document.getElementById("dobSpinner");
-const dobConfirmText = document.getElementById("dobConfirmText");
+
 
 function openDobModal(subtext) {
   if (dobSub) dobSub.textContent = subtext || "";
@@ -25,23 +24,10 @@ function openDobModal(subtext) {
     dobError.textContent = "";
   }
   if (dobInput) dobInput.value = "";
-
-  if (!dobModal) return;
-  // prepare
-  dobModal.style.display = "flex";
-  // animate in on next frame
-  requestAnimationFrame(() => dobModal.classList.add("visible"));
+  if (dobModal) dobModal.style.display = "flex";
 }
-
 function closeDobModal() {
-  if (!dobModal) return;
-  dobModal.classList.remove("visible");
-  // wait for animation to finish, then hide
-  const onEnd = () => {
-    dobModal.style.display = "none";
-    dobModal.removeEventListener("transitionend", onEnd);
-  };
-  dobModal.addEventListener("transitionend", onEnd);
+  if (dobModal) dobModal.style.display = "none";
 }
 
 // keep track of uploaded base name for naming the PDF
@@ -131,82 +117,90 @@ form.addEventListener("submit", async (e) => {
     const data = await res.json();
 
     // --- YOB-only flow: backend is asking for a full DOB ---
-    dobConfirm.onclick = async () => {
-      const iso = dobInput.value; // yyyy-mm-dd
-      if (!iso) {
-        dobError.textContent = "Please pick a date.";
-        dobError.style.display = "block";
-        return;
-      }
-      const [yyyy, mm, dd] = iso.split("-");
-      if (String(data.yob) !== yyyy) {
-        dobError.textContent = `Year must match ${data.yob}. You picked ${yyyy}.`;
-        dobError.style.display = "block";
-        return;
-      }
+    if (data.requiresDob) {
+      // Show the DOB modal with the server-provided YOB
+      openDobModal(
+        `Aadhaar contains only Year of Birth (${data.yob}). Please enter full date of birth.`
+      );
 
-      // --- Start loading state on modal confirm ---
-      dobConfirm.disabled = true;
-      if (dobSpinner) dobSpinner.classList.remove("hidden");
-      if (dobConfirmText) dobConfirmText.textContent = "Generating...";
+      // Wire buttons (overwrite old handlers to avoid stacking)
+      dobCancel.onclick = () => {
+        closeDobModal();
+        // Nothing else to do; the submit's finally{} will restore the button state
+      };
 
-      try {
-        const finalizeRes = await fetch("/finalize-dob", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            baseName: uploadedBaseName,
-            dobFull: `${dd}/${mm}/${yyyy}`,
-          }),
-        });
-        const finalizeData = await finalizeRes.json();
-        if (!finalizeRes.ok) {
-          dobError.textContent = finalizeData.error || "Failed to finalize.";
+      dobConfirm.onclick = async () => {
+        const iso = dobInput.value; // yyyy-mm-dd from <input type="date">
+        if (!iso) {
+          dobError.textContent = "Please pick a date.";
           dobError.style.display = "block";
-          return; // keep modal open, still in loading—so fall through to finally to reset button
+          return;
+        }
+        const [yyyy, mm, dd] = iso.split("-");
+        // Quick client-side year check for smooth UX
+        if (String(data.yob) !== yyyy) {
+          dobError.textContent = `Year must match ${data.yob}. You picked ${yyyy}.`;
+          dobError.style.display = "block";
+          return;
         }
 
-        closeDobModal();
+        // Submit full DOB to finalize
+        try {
+          const finalizeRes = await fetch("/finalize-dob", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              baseName: uploadedBaseName, // same as server folder name
+              dobFull: `${dd}/${mm}/${yyyy}`, // dd/mm/yyyy
+            }),
+          });
+          const finalizeData = await finalizeRes.json();
+          if (!finalizeRes.ok) {
+            dobError.textContent = finalizeData.error || "Failed to finalize.";
+            dobError.style.display = "block";
+            return;
+          }
 
-        // ---- Continue like normal success path using finalize output ----
-        const base = window.location.origin;
-        const templateFront = document.getElementById("templateFront");
-        const templateBack = document.getElementById("templateBack");
-        const downloadFront = document.getElementById("downloadFront");
-        const downloadBack = document.getElementById("downloadBack");
+          closeDobModal();
 
-        templateFront.src = base + finalizeData.downloadUrlFront;
-        templateBack.src = base + finalizeData.downloadUrlBack;
+          // ---- Continue like normal success path using finalize output ----
+          const base = window.location.origin;
+          const templateFront = document.getElementById("templateFront");
+          const templateBack = document.getElementById("templateBack");
+          const downloadFront = document.getElementById("downloadFront");
+          const downloadBack = document.getElementById("downloadBack");
 
-        generatedFrontPath = finalizeData.downloadUrlFront;
-        generatedBackPath = finalizeData.downloadUrlBack;
+          templateFront.src = base + finalizeData.downloadUrlFront;
+          templateBack.src = base + finalizeData.downloadUrlBack;
 
-        setImageLoadState(templateFront);
-        setImageLoadState(templateBack);
+          generatedFrontPath = finalizeData.downloadUrlFront;
+          generatedBackPath = finalizeData.downloadUrlBack;
 
-        downloadFront.href = templateFront.src;
-        downloadBack.href = templateBack.src;
+          setImageLoadState(templateFront);
+          setImageLoadState(templateBack);
 
-        document.getElementById("templatePreview").style.display = "block";
+          downloadFront.href = templateFront.src;
+          downloadBack.href = templateBack.src;
 
-        await Promise.all([
-          new Promise((r) => (templateFront.onload = r)),
-          new Promise((r) => (templateBack.onload = r)),
-        ]);
+          document.getElementById("templatePreview").style.display = "block";
 
-        hideInstructionsSmoothly();
-        showToast("Aadhaar card generated successfully!");
-      } catch (e) {
-        console.error(e);
-        dobError.textContent = "Something went wrong while finalizing.";
-        dobError.style.display = "block";
-      } finally {
-        // --- Reset loading state ---
-        dobConfirm.disabled = false;
-        if (dobSpinner) dobSpinner.classList.add("hidden");
-        if (dobConfirmText) dobConfirmText.textContent = "Confirm";
-      }
-    };
+          await Promise.all([
+            new Promise((r) => (templateFront.onload = r)),
+            new Promise((r) => (templateBack.onload = r)),
+          ]);
+
+          hideInstructionsSmoothly();
+          showToast("Aadhaar card generated successfully!");
+        } catch (e) {
+          console.error(e);
+          dobError.textContent = "Something went wrong while finalizing.";
+          dobError.style.display = "block";
+        }
+      };
+
+      // IMPORTANT: Stop the normal success flow now; the submit's finally{} will run.
+      return;
+    }
 
     if (data.error) {
       passwordError.textContent =
