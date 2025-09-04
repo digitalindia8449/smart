@@ -167,14 +167,18 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
           englishName = lines[toIndex + 2].replace(/\s+/g, " ").trim();
         }
 
-        // DOB may be full or only YOB
+        // --- DOB/YOB extraction (handles full DOB and year-only cases) ---
         let dob =
           (text.match(/DOB[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i) || [])[1] ||
           "";
+
+        // Try to get a YEAR even if DOB is year-only like "DOB: 2004"
         const yob =
-          (text.match(/Year\s*of\s*Birth[:\s]*((19|20)\d{2})/i) ||
-            text.match(/\bYOB[:\s]*((19|20)\d{2})/i) ||
-            (dob && !dob.includes("/") ? [null, yearOf(dob)] : null) ||
+          (text.match(/Year\s*of\s*Birth[:\s]*((19|20)\d{2})/i) || // Year of Birth: 2004
+            text.match(/\bYOB[:\s]*((19|20)\d{2})/i) || // YOB: 2004
+            text.match(/DOB[:\s]*((19|20)\d{2})(?!\/)/i) || // DOB: 2004 (no slashes)
+            text.match(/जन्म\s*वर्ष[:\s]*((19|20)\d{2})/i) || // Hindi: जन्म वर्ष: 2004 (optional)
+            (dob && !dob.includes("/") ? [null, yearOf(dob)] : null) || // fallback if dob somehow captured but no slashes
             [])[1] || "";
 
         const genderMatch = text.match(/(MALE|FEMALE|पुरुष|महिला)/i);
@@ -265,6 +269,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
         const cmdImage = `${pdfimagesPath} -j "${decryptedPath}" "${imagePrefix}"`;
 
         // If only Year of Birth exists, ask client to provide full DOB and stop here
+        console.log("Extracted DOB:", dob, " | YOB:", yob);
         const needsFullDob =
           !!yob && (!dob || !/^\d{2}\/\d{2}\/\d{4}$/.test(dob));
         if (needsFullDob) {
@@ -644,7 +649,9 @@ app.post("/finalize-dob", async (req, res) => {
     const userDir = path.join(uploadDir, baseName);
     const pendingPath = path.join(userDir, "pending-yob.json");
     if (!fs.existsSync(pendingPath)) {
-      return res.status(404).json({ error: "No pending YOB job found for this baseName" });
+      return res
+        .status(404)
+        .json({ error: "No pending YOB job found for this baseName" });
     }
 
     const pending = JSON.parse(fs.readFileSync(pendingPath, "utf8"));
@@ -652,15 +659,25 @@ app.post("/finalize-dob", async (req, res) => {
     const enteredYear = yearOf(dobFull);
     if (!expectedYear || !enteredYear || expectedYear !== enteredYear) {
       return res.status(400).json({
-        error: `Year mismatch. Aadhaar shows year ${expectedYear}, but you entered ${enteredYear}.`
+        error: `Year mismatch. Aadhaar shows year ${expectedYear}, but you entered ${enteredYear}.`,
       });
     }
 
     // Re-detect photo/templates based on files present
     const allFiles = fs.readdirSync(userDir);
     const photoFilename =
-      allFiles.find((f) => f.startsWith(baseName) && f.includes("photo-007") && f.endsWith(".jpg")) ||
-      allFiles.find((f) => f.startsWith(baseName) && f.includes("photo-010") && f.endsWith(".jpg"));
+      allFiles.find(
+        (f) =>
+          f.startsWith(baseName) &&
+          f.includes("photo-007") &&
+          f.endsWith(".jpg")
+      ) ||
+      allFiles.find(
+        (f) =>
+          f.startsWith(baseName) &&
+          f.includes("photo-010") &&
+          f.endsWith(".jpg")
+      );
     const photoPath = photoFilename ? path.join(userDir, photoFilename) : "";
     const isChild = photoFilename && photoFilename.includes("photo-010");
 
@@ -673,10 +690,16 @@ app.post("/finalize-dob", async (req, res) => {
       : path.join(__dirname, "..", "template", "back.png");
 
     const {
-      hindiName, englishName, gender,
-      aadhaar, mobile, vid,
-      issueDate, detailsDate,
-      addressHindi, addressEnglish
+      hindiName,
+      englishName,
+      gender,
+      aadhaar,
+      mobile,
+      vid,
+      issueDate,
+      detailsDate,
+      addressHindi,
+      addressEnglish,
     } = pending.extracted;
 
     // Render (same as /upload, but with dobFull)
@@ -741,14 +764,30 @@ app.post("/finalize-dob", async (req, res) => {
       ctx.fillText(line, x, y);
     }
 
-    const hindiX = 200, hindiY = 705;
-    const englishX = 200, englishY = 1170;
+    const hindiX = 200,
+      hindiY = 705;
+    const englishX = 200,
+      englishY = 1170;
 
     backCtx.font = '70pt "NotoSansHindi"';
-    drawWrappedTextBack(backCtx, addressHindi || "—", hindiX, hindiY, 1900, 120);
+    drawWrappedTextBack(
+      backCtx,
+      addressHindi || "—",
+      hindiX,
+      hindiY,
+      1900,
+      120
+    );
 
     backCtx.font = "62pt Arial";
-    drawWrappedTextBack(backCtx, addressEnglish || "—", englishX, englishY, 1950, 120);
+    drawWrappedTextBack(
+      backCtx,
+      addressEnglish || "—",
+      englishX,
+      englishY,
+      1950,
+      120
+    );
 
     backCtx.save();
     backCtx.translate(145, 870);
@@ -773,11 +812,23 @@ app.post("/finalize-dob", async (req, res) => {
     const frontOutName = `generated-${Date.now()}.png`;
     const backOutName = `back-${Date.now()}.png`;
     await Promise.all([
-      new Promise((resolve) => canvas.createPNGStream().pipe(fs.createWriteStream(path.join(userDir, frontOutName))).on("finish", resolve)),
-      new Promise((resolve) => backCanvas.createPNGStream().pipe(fs.createWriteStream(path.join(userDir, backOutName))).on("finish", resolve)),
+      new Promise((resolve) =>
+        canvas
+          .createPNGStream()
+          .pipe(fs.createWriteStream(path.join(userDir, frontOutName)))
+          .on("finish", resolve)
+      ),
+      new Promise((resolve) =>
+        backCanvas
+          .createPNGStream()
+          .pipe(fs.createWriteStream(path.join(userDir, backOutName)))
+          .on("finish", resolve)
+      ),
     ]);
 
-    try { fs.unlinkSync(pendingPath); } catch {}
+    try {
+      fs.unlinkSync(pendingPath);
+    } catch {}
 
     return res.json({
       ok: true,
@@ -790,7 +841,6 @@ app.post("/finalize-dob", async (req, res) => {
     res.status(500).json({ error: "Failed to finalize with DOB" });
   }
 });
-
 
 const frontendPath = path.join(__dirname, "..", "frontend");
 app.use(express.static(frontendPath));
