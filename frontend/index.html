@@ -5,35 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Smart PDF Render</title>
     <link rel="stylesheet" href="style.css" />
-    <style>
-      /* Smooth fade for backdrop */
-      #dobModal {
-        opacity: 0;
-        transition: opacity 0.25s ease;
-      }
-      #dobModal.visible {
-        opacity: 1;
-      }
-
-      /* Slide & fade for panel */
-      #dobModal .modal-panel {
-        transform: translateY(10px) scale(0.98);
-        opacity: 0;
-        transition: transform 0.25s ease, opacity 0.25s ease;
-      }
-      #dobModal.visible .modal-panel {
-        transform: none;
-        opacity: 1;
-      }
-
-      /* Prevent pointer events when hidden (optional) */
-      #dobModal:not(.visible) {
-        pointer-events: none;
-      }
-      #dobModal.visible {
-        pointer-events: auto;
-      }
-    </style>
   </head>
   <body>
     <div class="container glass">
@@ -165,7 +136,6 @@
       "
     >
       <div
-        class="modal-panel"
         style="
           width: min(92vw, 520px);
           background: #fff;
@@ -259,9 +229,6 @@
             id="dobConfirm"
             type="button"
             style="
-              display: inline-flex;
-              align-items: center;
-              gap: 8px;
               padding: 10px 14px;
               border-radius: 10px;
               border: none;
@@ -270,8 +237,7 @@
               cursor: pointer;
             "
           >
-            <span id="dobConfirmText">Confirm</span>
-            <span id="dobSpinner" class="spinner hidden"></span>
+            Confirm
           </button>
         </div>
       </div>
