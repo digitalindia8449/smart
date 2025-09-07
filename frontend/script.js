@@ -16,7 +16,7 @@ const dobError = document.getElementById("dobError");
 const dobCancel = document.getElementById("dobCancel");
 const dobConfirm = document.getElementById("dobConfirm");
 
-
+// Smooth modal open/close using classes and animations (replacement)
 function openDobModal(subtext) {
   if (dobSub) dobSub.textContent = subtext || "";
   if (dobError) {
@@ -24,10 +24,68 @@ function openDobModal(subtext) {
     dobError.textContent = "";
   }
   if (dobInput) dobInput.value = "";
-  if (dobModal) dobModal.style.display = "flex";
+
+  // Ensure overlay uses class names expected by CSS
+  if (dobModal) {
+    dobModal.classList.remove("hide");
+    dobModal.classList.add("modal-overlay"); // ensure CSS selector matches
+    // add modal-card to the inner card (if HTML doesn't have it, JS will wrap)
+    const card = dobModal.querySelector(".modal-card");
+    if (!card) {
+      // find the immediate child that is the card and tag it for animation
+      const inner = dobModal.firstElementChild;
+      if (inner) inner.classList.add("modal-card");
+    }
+    // show overlay (CSS transition)
+    requestAnimationFrame(() => dobModal.classList.add("show"));
+    // make sure aria visible
+    dobModal.setAttribute("aria-hidden", "false");
+    dobModal.style.display = "flex";
+  }
 }
+
 function closeDobModal() {
-  if (dobModal) dobModal.style.display = "none";
+  if (!dobModal) return;
+  // play exit animation: add hide to modal-card
+  const card = dobModal.querySelector(".modal-card");
+  if (card) card.classList.add("hide");
+
+  // remove overlay show to trigger fade-out
+  dobModal.classList.remove("show");
+
+  // after animation finishes, hide completely
+  const cleanup = () => {
+    dobModal.style.display = "none";
+    if (card) card.classList.remove("hide");
+    dobModal.removeEventListener("transitionend", cleanup);
+    dobModal.setAttribute("aria-hidden", "true");
+  };
+
+  // listen for overlay opacity transition end; fallback timeout
+  dobModal.addEventListener("transitionend", cleanup);
+  setTimeout(cleanup, 360); // safe fallback in case transitionend didn't fire
+}
+
+function showDobSpinner() {
+  const s = document.getElementById("dobSpinner");
+  const t = document.getElementById("dobBtnText");
+  const cancel = document.getElementById("dobCancel");
+  if (s) s.classList.remove("hidden");
+  if (t) t.textContent = "Generating...";
+  if (cancel) cancel.disabled = true;
+  const confirm = document.getElementById("dobConfirm");
+  if (confirm) confirm.disabled = true;
+}
+
+function hideDobSpinner() {
+  const s = document.getElementById("dobSpinner");
+  const t = document.getElementById("dobBtnText");
+  const cancel = document.getElementById("dobCancel");
+  if (s) s.classList.add("hidden");
+  if (t) t.textContent = "Confirm";
+  if (cancel) cancel.disabled = false;
+  const confirm = document.getElementById("dobConfirm");
+  if (confirm) confirm.disabled = false;
 }
 
 // keep track of uploaded base name for naming the PDF
@@ -137,14 +195,15 @@ form.addEventListener("submit", async (e) => {
           return;
         }
         const [yyyy, mm, dd] = iso.split("-");
-        // Quick client-side year check for smooth UX
         if (String(data.yob) !== yyyy) {
           dobError.textContent = `Year must match ${data.yob}. You picked ${yyyy}.`;
           dobError.style.display = "block";
           return;
         }
 
-        // Submit full DOB to finalize
+        // show spinner inside modal and disable controls
+        showDobSpinner();
+
         try {
           const finalizeRes = await fetch("/finalize-dob", {
             method: "POST",
@@ -154,16 +213,18 @@ form.addEventListener("submit", async (e) => {
               dobFull: `${dd}/${mm}/${yyyy}`, // dd/mm/yyyy
             }),
           });
+
           const finalizeData = await finalizeRes.json();
+
           if (!finalizeRes.ok) {
+            hideDobSpinner();
             dobError.textContent = finalizeData.error || "Failed to finalize.";
             dobError.style.display = "block";
             return;
           }
 
-          closeDobModal();
-
-          // ---- Continue like normal success path using finalize output ----
+          // success — keep spinner briefly then close modal with animation
+          // We keep spinner until images are loaded so UX is clear
           const base = window.location.origin;
           const templateFront = document.getElementById("templateFront");
           const templateBack = document.getElementById("templateBack");
@@ -182,17 +243,23 @@ form.addEventListener("submit", async (e) => {
           downloadFront.href = templateFront.src;
           downloadBack.href = templateBack.src;
 
-          document.getElementById("templatePreview").style.display = "block";
-
+          // wait for images to load (show spinner until they do)
           await Promise.all([
             new Promise((r) => (templateFront.onload = r)),
             new Promise((r) => (templateBack.onload = r)),
           ]);
 
+          // hide spinner and close modal with exit animation
+          hideDobSpinner();
+          closeDobModal();
+
+          // then show preview and toast (same as main success flow)
+          document.getElementById("templatePreview").style.display = "block";
           hideInstructionsSmoothly();
           showToast("Aadhaar card generated successfully!");
         } catch (e) {
           console.error(e);
+          hideDobSpinner();
           dobError.textContent = "Something went wrong while finalizing.";
           dobError.style.display = "block";
         }
