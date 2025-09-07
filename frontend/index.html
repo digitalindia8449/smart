@@ -225,6 +225,8 @@
           >
             Cancel
           </button>
+
+          <!-- Confirm with inline spinner and text -->
           <button
             id="dobConfirm"
             type="button"
@@ -235,9 +237,17 @@
               background: #111827;
               color: #fff;
               cursor: pointer;
+              display: inline-flex;
+              align-items: center;
+              gap: 10px;
             "
           >
-            Confirm
+            <span id="dobBtnText">Confirm</span>
+            <span
+              id="dobSpinner"
+              class="spinner hidden"
+              aria-hidden="true"
+            ></span>
           </button>
         </div>
       </div>
