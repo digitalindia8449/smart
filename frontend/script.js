@@ -120,11 +120,16 @@ function showToast(message = "Success!") {
 
 // SET IMAGE STATE
 function setImageLoadState(img) {
-  img.onload = null;
-  img.onerror = () => {
-    console.error("Failed to load image:", img.src);
-  };
+  img.addEventListener(
+    "error",
+    () => {
+      console.error("Failed to load image:", img.src);
+      showToast("Failed to load generated image.");
+    },
+    { once: true } // listener removed after first trigger
+  );
 }
+
 
 // Hide instructions smoothly (visible again on refresh)
 function hideInstructionsSmoothly() {
