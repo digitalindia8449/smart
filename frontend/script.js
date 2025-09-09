@@ -176,6 +176,8 @@ form.addEventListener("submit", async (e) => {
 
     // --- YOB-only flow: backend is asking for a full DOB ---
     if (data.requiresDob) {
+      // IMPORTANT FIX: use server's canonical baseName for finalize-dob
+      uploadedBaseName = data.baseName; // <-- add this line
       // Show the DOB modal with the server-provided YOB
       openDobModal(
         `Aadhaar contains only Year of Birth (${data.yob}). Please enter full date of birth.`
