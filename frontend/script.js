@@ -130,6 +130,37 @@ function setImageLoadState(img) {
   );
 }
 
+// --- Wait for an image to load, reject on error or timeout ---
+function waitForImageLoad(img, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    // if already loaded successfully
+    if (img.complete && img.naturalWidth && img.naturalWidth > 0) {
+      return resolve();
+    }
+
+    let timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Image load timeout"));
+    }, timeoutMs);
+
+    function onLoad() {
+      cleanup();
+      resolve();
+    }
+    function onError(e) {
+      cleanup();
+      reject(new Error("Image failed to load"));
+    }
+    function cleanup() {
+      clearTimeout(timer);
+      img.removeEventListener("load", onLoad);
+      img.removeEventListener("error", onError);
+    }
+
+    img.addEventListener("load", onLoad, { once: true });
+    img.addEventListener("error", onError, { once: true });
+  });
+}
 
 // Hide instructions smoothly (visible again on refresh)
 function hideInstructionsSmoothly() {
@@ -250,11 +281,20 @@ form.addEventListener("submit", async (e) => {
           downloadFront.href = templateFront.src;
           downloadBack.href = templateBack.src;
 
-          // wait for images to load (show spinner until they do)
-          await Promise.all([
-            new Promise((r) => (templateFront.onload = r)),
-            new Promise((r) => (templateBack.onload = r)),
-          ]);
+          // wait for images to load (show spinner until they do), but handle errors/timeouts
+          try {
+            await Promise.all([
+              waitForImageLoad(templateFront, 10000),
+              waitForImageLoad(templateBack, 10000),
+            ]);
+          } catch (err) {
+            console.error("Image load error (finalize-dob):", err);
+            hideDobSpinner();
+            dobError.textContent =
+              "Failed to load generated images. Please try again or check the server.";
+            dobError.style.display = "block";
+            return;
+          }
 
           // hide spinner and close modal with exit animation
           hideDobSpinner();
@@ -308,10 +348,18 @@ form.addEventListener("submit", async (e) => {
 
       document.getElementById("templatePreview").style.display = "block";
 
-      await Promise.all([
-        new Promise((res) => (templateFront.onload = res)),
-        new Promise((res) => (templateBack.onload = res)),
-      ]);
+      try {
+        await Promise.all([
+          waitForImageLoad(templateFront, 10000),
+          waitForImageLoad(templateBack, 10000),
+        ]);
+      } catch (err) {
+        console.error("Image load error (upload):", err);
+        // hide preview if images failed
+        document.getElementById("templatePreview").style.display = "none";
+        showToast("Failed to load generated image. Try again.");
+        return;
+      }
 
       // Smoothly hide the instruction box (returns on refresh)
       hideInstructionsSmoothly();
