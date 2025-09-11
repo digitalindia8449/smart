@@ -277,19 +277,20 @@ form.addEventListener("submit", async (e) => {
             return;
           }
 
-          // success — keep spinner briefly then close modal with animation
-          // We keep spinner until images are loaded so UX is clear
+          // --- Robust flow to avoid lazy-loading / hidden-element issues ---
           const base = window.location.origin;
           const templateFront = document.getElementById("templateFront");
           const templateBack = document.getElementById("templateBack");
           const downloadFront = document.getElementById("downloadFront");
           const downloadBack = document.getElementById("downloadBack");
 
-          // ---------- REPLACE ASSIGNMENT (finalize-dob success) ----------
-          const frontUrl = base + finalizeData.downloadUrlFront;
-          const backUrl = base + finalizeData.downloadUrlBack;
+          // Build and encode URLs (protect against spaces/special chars)
+          const frontUrlRaw = base + finalizeData.downloadUrlFront;
+          const backUrlRaw = base + finalizeData.downloadUrlBack;
+          const frontUrl = encodeURI(frontUrlRaw);
+          const backUrl = encodeURI(backUrlRaw);
 
-          // wait a bit and check server has the files
+          // Quick server-availability check
           const okFront = await ensureUrlAvailable(frontUrl, 8, 300);
           const okBack = await ensureUrlAvailable(backUrl, 8, 300);
 
@@ -301,21 +302,34 @@ form.addEventListener("submit", async (e) => {
             return;
           }
 
-          // cache-bust
-          templateFront.src = frontUrl + "?_=" + Date.now();
-          templateBack.src = backUrl + "?_=" + Date.now();
+          // Ensure browser will fetch images immediately even if hidden
+          try {
+            templateFront.loading = "eager";
+          } catch (e) {}
+          try {
+            templateBack.loading = "eager";
+          } catch (e) {}
 
-          generatedFrontPath = finalizeData.downloadUrlFront;
-          generatedBackPath = finalizeData.downloadUrlBack;
-
-          // set download links, image handlers, then wait for images...
+          // Attach error handlers BEFORE assigning src
           setImageLoadState(templateFront);
           setImageLoadState(templateBack);
 
-          downloadFront.href = templateFront.src;
-          downloadBack.href = templateBack.src;
+          // Set download links (cache-busted)
+          downloadFront.href = frontUrl + "?_=" + Date.now();
+          downloadBack.href = backUrl + "?_=" + Date.now();
 
-          // wait for images to load (show spinner until they do), but handle errors/timeouts
+          // Make preview visible BEFORE assigning src to avoid lazy-defer
+          document.getElementById("templatePreview").style.display = "block";
+
+          // Assign src last (cache-busted)
+          templateFront.src = frontUrl + "?_=" + Date.now();
+          templateBack.src = backUrl + "?_=" + Date.now();
+
+          // store paths for PDF generation
+          generatedFrontPath = finalizeData.downloadUrlFront;
+          generatedBackPath = finalizeData.downloadUrlBack;
+
+          // Wait for images to load (spinner still shown)
           try {
             await Promise.all([
               waitForImageLoad(templateFront, 20000),
@@ -330,7 +344,7 @@ form.addEventListener("submit", async (e) => {
             return;
           }
 
-          // hide spinner and close modal with exit animation
+          // Images loaded successfully — hide spinner and close modal
           hideDobSpinner();
           closeDobModal();
 
