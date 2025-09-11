@@ -3,7 +3,7 @@ const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const { exec } = require("child_process");
+const { exec, execSync } = require("child_process");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 // ---------- ADD THIS NEAR TOP ----------
 const { pipeline } = require("stream");
@@ -309,6 +309,45 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
               );
             } else {
               console.log("pdfimages completed for pending-yob:", userDir);
+            }
+
+            // --- convert pdfimages' photo-000.ppm -> <baseName>_qr.png synchronously ---
+            try {
+              const allNow = fs.readdirSync(userDir);
+              const ppmFile = allNow.find(
+                (f) =>
+                  f.startsWith(baseName) &&
+                  f.includes("photo-000") &&
+                  f.toLowerCase().endsWith(".ppm")
+              );
+
+              if (ppmFile) {
+                const ppmPathLocal = path.join(userDir, ppmFile);
+                const qrPngLocal = path.join(userDir, `${baseName}_qr.png`);
+                const convertCmdLocal = `convert "${ppmPathLocal}" "${qrPngLocal}"`;
+
+                try {
+                  execSync(convertCmdLocal); // BLOCKS briefly but guarantees PNG exists
+                  console.log(
+                    "✅ QR converted (sync) for pending-yob:",
+                    qrPngLocal
+                  );
+                } catch (convErr) {
+                  console.warn(
+                    "Sync QR convert failed in pending-yob branch:",
+                    convErr && convErr.message ? convErr.message : convErr
+                  );
+                }
+              } else {
+                console.log(
+                  "No ppm (photo-000) found for pending-yob conversion."
+                );
+              }
+            } catch (e) {
+              console.warn(
+                "Error while attempting QR convert for pending-yob:",
+                e
+              );
             }
 
             // write pending file once extraction attempt finished
