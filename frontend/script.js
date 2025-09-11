@@ -270,6 +270,22 @@ form.addEventListener("submit", async (e) => {
 
           const finalizeData = await finalizeRes.json();
 
+          // --- child/adult flag from server (inserted server-side) ---
+          const isChild = !!finalizeData.isChild;
+          const photoFilenameFromServer = finalizeData.photoFilename || "";
+          console.log(
+            "finalize-dob: isChild =",
+            isChild,
+            "photo:",
+            photoFilenameFromServer
+          );
+
+          // optionally store or mark the preview container with the detected type
+          const previewContainer = document.getElementById("templatePreview");
+          if (previewContainer) {
+            previewContainer.dataset.type = isChild ? "child" : "adult";
+          }
+
           if (!finalizeRes.ok) {
             hideDobSpinner();
             dobError.textContent = finalizeData.error || "Failed to finalize.";
