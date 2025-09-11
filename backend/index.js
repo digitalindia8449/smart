@@ -678,8 +678,10 @@ app.post("/finalize-dob", async (req, res) => {
       });
     }
 
-    // Re-detect photo/templates based on files present
+    // --- detect photo & decide child/adult template (same logic as /upload) ---
     const allFiles = fs.readdirSync(userDir);
+
+    // prefer adult photo-007, fallback to child photo-010
     const photoFilename =
       allFiles.find(
         (f) =>
@@ -693,9 +695,11 @@ app.post("/finalize-dob", async (req, res) => {
           f.includes("photo-010") &&
           f.endsWith(".jpg")
       );
-    const photoPath = photoFilename ? path.join(userDir, photoFilename) : "";
-    const isChild = photoFilename && photoFilename.includes("photo-010");
 
+    const photoPath = photoFilename ? path.join(userDir, photoFilename) : "";
+    const isChild = !!(photoFilename && photoFilename.includes("photo-010"));
+
+    // set template paths based on detected photo type
     const frontTemplatePath = isChild
       ? path.join(__dirname, "..", "template", "child.png")
       : path.join(__dirname, "..", "template", "final.png");
