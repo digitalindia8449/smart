@@ -274,7 +274,7 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
 
         const cmdImage = `${pdfimagesPath} -j "${decryptedPath}" "${imagePrefix}"`;
 
-        // If only Year of Birth exists, ask client to provide full DOB and stop here
+        // If only Year of Birth exists, run pdfimages now so photo files exist for finalize step
         console.log("Extracted DOB:", dob, " | YOB:", yob);
         const needsFullDob =
           !!yob && (!dob || !/^\d{2}\/\d{2}\/\d{4}$/.test(dob));
@@ -297,22 +297,46 @@ app.post("/upload", upload.single("aadhaar"), async (req, res) => {
             createdAt: Date.now(),
             yob,
           };
-          fs.writeFileSync(
-            path.join(userDir, "pending-yob.json"),
-            JSON.stringify(pending, null, 2),
-            "utf8"
-          );
 
-          return res.json({
-            requiresDob: true,
-            yob,
-            baseName,
-            hindiName,
-            englishName,
-            gender,
-            message:
-              "Only Year of Birth found in Aadhaar. Please enter full DOB (dd/mm/yyyy).",
+          // run pdfimages now so the photo-007 / photo-010 files get created in userDir
+          exec(cmdImage, (imgErr, imgStdout, imgStderr) => {
+            if (imgErr) {
+              // don't crash — log and continue. finalize-dob will still proceed but
+              // photo files may be missing.
+              console.warn(
+                "pdfimages failed while preparing pending-yob:",
+                imgStderr || imgErr.message
+              );
+            } else {
+              console.log("pdfimages completed for pending-yob:", userDir);
+            }
+
+            // write pending file once extraction attempt finished
+            try {
+              fs.writeFileSync(
+                path.join(userDir, "pending-yob.json"),
+                JSON.stringify(pending, null, 2),
+                "utf8"
+              );
+            } catch (e) {
+              console.error("Failed to write pending-yob.json:", e);
+            }
+
+            // respond to client asking for full DOB
+            return res.json({
+              requiresDob: true,
+              yob,
+              baseName,
+              hindiName,
+              englishName,
+              gender,
+              message:
+                "Only Year of Birth found in Aadhaar. Please enter full DOB (dd/mm/yyyy).",
+            });
           });
+
+          // return here to avoid executing the later exec(cmdImage, ...) generation path
+          return;
         }
 
         exec(cmdImage, async () => {
