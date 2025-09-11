@@ -16,6 +16,32 @@ const dobError = document.getElementById("dobError");
 const dobCancel = document.getElementById("dobCancel");
 const dobConfirm = document.getElementById("dobConfirm");
 
+// --- KEYBOARD: allow Enter to submit in main form and in DOB modal ---
+
+// If file input focused + user presses Enter -> submit the form (start generation)
+const aadhaarFile = document.getElementById("aadhaarFile");
+if (aadhaarFile) {
+  aadhaarFile.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      // trigger the same action as clicking submit
+      submitBtn.click();
+    }
+  });
+}
+
+// If DOB input focused + user presses Enter -> act like clicking Confirm
+if (dobInput) {
+  dobInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      // click the confirm button (handler is wired when modal opens)
+      if (typeof dobConfirm.click === "function") dobConfirm.click();
+    }
+  });
+}
+
+
 // ---------- ADD THIS NEAR THE TOP OF script.js ----------
 async function ensureUrlAvailable(url, attempts = 6, delayMs = 250) {
   for (let i = 0; i < attempts; i++) {
