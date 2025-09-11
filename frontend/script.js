@@ -16,6 +16,22 @@ const dobError = document.getElementById("dobError");
 const dobCancel = document.getElementById("dobCancel");
 const dobConfirm = document.getElementById("dobConfirm");
 
+// ---------- ADD THIS NEAR THE TOP OF script.js ----------
+async function ensureUrlAvailable(url, attempts = 6, delayMs = 250) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      // HEAD is lightweight and should work for same-origin static files
+      const r = await fetch(url, { method: "HEAD", cache: "no-store" });
+      if (r.ok) return true;
+    } catch (err) {
+      // swallow and retry
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
+}
+// ---------------------------------------
+
 // Smooth modal open/close using classes and animations (replacement)
 function openDobModal(subtext) {
   if (dobSub) dobSub.textContent = subtext || "";
@@ -131,7 +147,7 @@ function setImageLoadState(img) {
 }
 
 // --- Wait for an image to load, reject on error or timeout ---
-function waitForImageLoad(img, timeoutMs = 10000) {
+function waitForImageLoad(img, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
     // if already loaded successfully
     if (img.complete && img.naturalWidth && img.naturalWidth > 0) {
@@ -269,12 +285,30 @@ form.addEventListener("submit", async (e) => {
           const downloadFront = document.getElementById("downloadFront");
           const downloadBack = document.getElementById("downloadBack");
 
-          templateFront.src = base + finalizeData.downloadUrlFront;
-          templateBack.src = base + finalizeData.downloadUrlBack;
+          // ---------- REPLACE ASSIGNMENT (finalize-dob success) ----------
+          const frontUrl = base + finalizeData.downloadUrlFront;
+          const backUrl = base + finalizeData.downloadUrlBack;
+
+          // wait a bit and check server has the files
+          const okFront = await ensureUrlAvailable(frontUrl, 8, 300);
+          const okBack = await ensureUrlAvailable(backUrl, 8, 300);
+
+          if (!okFront || !okBack) {
+            hideDobSpinner();
+            dobError.textContent =
+              "Generated images not yet available; please try again in a moment.";
+            dobError.style.display = "block";
+            return;
+          }
+
+          // cache-bust
+          templateFront.src = frontUrl + "?_=" + Date.now();
+          templateBack.src = backUrl + "?_=" + Date.now();
 
           generatedFrontPath = finalizeData.downloadUrlFront;
           generatedBackPath = finalizeData.downloadUrlBack;
 
+          // set download links, image handlers, then wait for images...
           setImageLoadState(templateFront);
           setImageLoadState(templateBack);
 
@@ -284,8 +318,8 @@ form.addEventListener("submit", async (e) => {
           // wait for images to load (show spinner until they do), but handle errors/timeouts
           try {
             await Promise.all([
-              waitForImageLoad(templateFront, 10000),
-              waitForImageLoad(templateBack, 10000),
+              waitForImageLoad(templateFront, 20000),
+              waitForImageLoad(templateBack, 20000),
             ]);
           } catch (err) {
             console.error("Image load error (finalize-dob):", err);
@@ -331,15 +365,27 @@ form.addEventListener("submit", async (e) => {
       const downloadFront = document.getElementById("downloadFront");
       const downloadBack = document.getElementById("downloadBack");
 
-      // Assign src first
-      templateFront.src = base + data.downloadUrlFront;
-      templateBack.src = base + data.downloadUrlBack;
+      const frontUrl = base + data.downloadUrlFront;
+      const backUrl = base + data.downloadUrlBack;
 
-      // Remember server paths for PDF endpoint
+      const okFront = await ensureUrlAvailable(frontUrl, 6, 300);
+      const okBack = await ensureUrlAvailable(backUrl, 6, 300);
+
+      if (!okFront || !okBack) {
+        // server didn't respond yet: inform user and stop
+        showToast("Server still preparing images — try again in a moment.");
+        // Optionally keep preview hidden:
+        document.getElementById("templatePreview").style.display = "none";
+        return;
+      }
+
+      // cache-bust and assign
+      templateFront.src = frontUrl + "?_=" + Date.now();
+      templateBack.src = backUrl + "?_=" + Date.now();
+
       generatedFrontPath = data.downloadUrlFront;
       generatedBackPath = data.downloadUrlBack;
 
-      // Then set image state
       setImageLoadState(templateFront);
       setImageLoadState(templateBack);
 
@@ -350,8 +396,8 @@ form.addEventListener("submit", async (e) => {
 
       try {
         await Promise.all([
-          waitForImageLoad(templateFront, 10000),
-          waitForImageLoad(templateBack, 10000),
+          waitForImageLoad(templateFront, 20000),
+          waitForImageLoad(templateBack, 20000),
         ]);
       } catch (err) {
         console.error("Image load error (upload):", err);
