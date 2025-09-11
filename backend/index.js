@@ -866,9 +866,32 @@ app.post("/finalize-dob", async (req, res) => {
       fs.unlinkSync(pendingPath);
     } catch {}
 
+    // determine isChild again (this uses the same logic as earlier)
+    const finalAllFiles = fs.readdirSync(userDir || ".");
+    const finalPhotoFilename =
+      finalAllFiles.find(
+        (f) =>
+          f.startsWith(baseName) &&
+          f.includes("photo-007") &&
+          f.endsWith(".jpg")
+      ) ||
+      finalAllFiles.find(
+        (f) =>
+          f.startsWith(baseName) &&
+          f.includes("photo-010") &&
+          f.endsWith(".jpg")
+      ) ||
+      "";
+
+    const finalIsChild = !!(
+      finalPhotoFilename && finalPhotoFilename.includes("photo-010")
+    );
+
     return res.json({
       ok: true,
       dob: dobFull,
+      isChild: finalIsChild, // <-- NEW FLAG
+      photoFilename: finalPhotoFilename, // <-- helpful for debugging
       downloadUrlFront: `/images/${baseName}/${frontOutName}`,
       downloadUrlBack: `/images/${baseName}/${backOutName}`,
     });
